@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([27.699613162958727, 85.31687851843215], 10);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+        }).addTo(map);
+
+        const markers = {};
+
+        const ws = new WebSocket('ws://localhost:3000');
+        console.log(ws);
+        ws.onopen = () => {
+            console.log('WebSocket connection opened');
+        };
+
+        ws.onclose = (event) => {
+            console.log('WebSocket connection closed', event);
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error', error);
+        };
+
+        ws.onmessage = (event) => {
+            console.log(event);
+            const data = JSON.parse(event.data);
+            console.log('Received data:', data);
+
+            const { latitude, longitude, deviceId, server_datetime } = data;
+
+            if (!markers[deviceId]) {
+                markers[deviceId] = L.marker([latitude, longitude]).addTo(map);
+                //bindPopup(`Device ID: ${deviceId}<br>Time: ${server_datetime}`).openPopup();
+            } else {
+                const currentLatLng = markers[deviceId].getLatLng();
+                const newLatLng = L.latLng(latitude, longitude);
+
+                // Animate marker to the new location
+                
+                const duration = 1000; // duration of the animation in milliseconds
+                const frames = 60; // number of frames in the animation
+                const interval = duration / frames; // time between each frame
+
+                const latDiff = (newLatLng.lat - currentLatLng.lat) / frames;
+                const lngDiff = (newLatLng.lng - currentLatLng.lng) / frames;
+
+                let frame = 0;
+                const animate = () => {
+                    if (frame < frames) {
+                        const lat = currentLatLng.lat + latDiff * frame;
+                        const lng = currentLatLng.lng + lngDiff * frame;
+                        markers[deviceId].setLatLng([lat, lng]);
+                        frame++;
+                        setTimeout(animate, interval);
+                    } else {
+                        markers[deviceId].setLatLng(newLatLng);
+                    }
+                };
+
+                animate();
+                // markers[deviceId].setLatLng(newLatLng);
+                // markers[deviceId].bindPopup(`Device ID: ${deviceId}<br>Time: ${server_datetime}`).openPopup();
+
+                // Optionally, you can add a polyline to show the path
+                // const polyline = L.polyline([currentLatLng, newLatLng], { color: 'blue' }).addTo(map);
+                // map.fitBounds(polyline.getBounds());
+            }
+        };
+
+        // Periodically check WebSocket connection status
+        setInterval(() => {
+            if (ws.readyState !== WebSocket.OPEN) {
+                console.warn('WebSocket is not open. ReadyState:', ws.readyState);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
